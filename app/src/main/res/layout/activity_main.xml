@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="8dp"
+    android:background="#1E1E1E">
+
+    <com.yjbrly.fivesolver.BoardView
+        android:id="@+id/boardView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal" />
+
+    <!-- 第一行：新对局、悔棋、分析 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:weightSum="3">
+
+        <Button
+            android:id="@+id/btnNewGame"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="新对局"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/ios_button_bg"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:singleLine="true"
+            android:minWidth="0dp" />
+
+        <Button
+            android:id="@+id/btnUndo"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginLeft="4dp"
+            android:text="悔棋"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/ios_button_bg"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:singleLine="true"
+            android:minWidth="0dp" />
+
+        <Button
+            android:id="@+id/btnMultiAnalysis"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginLeft="4dp"
+            android:text="分析"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/ios_button_bg"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:singleLine="true"
+            android:minWidth="0dp" />
+    </LinearLayout>
+
+    <!-- 第二行：棋谱输入框（打谱模式显示） -->
+    <LinearLayout
+        android:id="@+id/layoutSgfInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <EditText
+            android:id="@+id/etSgfInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="粘贴棋谱 (如 h8g9g10...)"
+            android:textColorHint="#666666"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:background="#2A2A2A"
+            android:padding="4dp"
+            android:singleLine="true"
+            android:inputType="text"
+            android:imeOptions="actionDone" />
+    </LinearLayout>
+
+    <!-- 第三行：加载、<、> （打谱模式显示） -->
+    <LinearLayout
+        android:id="@+id/layoutSgfControls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        android:weightSum="3">
+
+        <Button
+            android:id="@+id/btnLoadSgf"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="加载"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/ios_button_bg"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:singleLine="true"
+            android:minWidth="0dp" />
+
+        <Button
+            android:id="@+id/btnPrevMove"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginLeft="4dp"
+            android:text="&lt;"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/ios_button_bg"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:textSize="16sp"
+            android:singleLine="true"
+            android:minWidth="0dp" />
+
+        <Button
+            android:id="@+id/btnNextMove"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginLeft="4dp"
+            android:text=">"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/ios_button_bg"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:textSize="16sp"
+            android:singleLine="true"
+            android:minWidth="0dp" />
+    </LinearLayout>
+
+    <!-- 第四行：信息显示 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#CCCCCC" />
+        <TextView
+            android:id="@+id/tvDepth"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="--"
+            android:textColor="#FFFFFF" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#CCCCCC" />
+        <TextView
+            android:id="@+id/tvEval"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="--"
+            android:textColor="#FFFFFF" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#CCCCCC" />
+        <TextView
+            android:id="@+id/tvStep"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0/0"
+            android:textColor="#FFFFFF" />
+    </LinearLayout>
+
+    <!-- 第五行：日志 -->
+    <ScrollView
+        android:id="@+id/scrollLog"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="8dp"
+        android:background="#2A2A2A">
+        <TextView
+            android:id="@+id/tvLog"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="10sp"
+            android:padding="4dp"
+            android:textColor="#CCCCCC"
+            android:background="#2A2A2A" />
+    </ScrollView>
+</LinearLayout>

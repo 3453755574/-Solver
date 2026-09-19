@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:background="@drawable/dialog_bg">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="新对局设置"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:layout_marginBottom="12dp" />
+
+    <RadioGroup
+        android:id="@+id/radioGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="12dp">
+
+        <RadioButton
+            android:id="@+id/radioBlack"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="先手 (执黑)"
+            android:textColor="#CCCCCC"
+            android:checked="true" />
+
+        <RadioButton
+            android:id="@+id/radioWhite"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="后手 (执白)"
+            android:textColor="#CCCCCC" />
+
+        <RadioButton
+            android:id="@+id/radioReview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="打谱模式"
+            android:textColor="#CCCCCC" />
+    </RadioGroup>
+
+    <!-- 思考时间滑动条 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="思考时间："
+            android:textColor="#CCCCCC" />
+
+        <SeekBar
+            android:id="@+id/seekTime"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:max="59"
+            android:progress="4" />
+
+        <TextView
+            android:id="@+id/tvTimeValue"
+            android:layout_width="40dp"
+            android:layout_height="wrap_content"
+            android:text="5秒"
+            android:textColor="#FFFFFF"
+            android:gravity="center" />
+    </LinearLayout>
+
+    <!-- 谨慎因子滑动条 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="谨慎因子："
+            android:textColor="#CCCCCC" />
+
+        <SeekBar
+            android:id="@+id/seekCaution"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:max="4"
+            android:progress="2" />
+
+        <TextView
+            android:id="@+id/tvCautionValue"
+            android:layout_width="30dp"
+            android:layout_height="wrap_content"
+            android:text="3"
+            android:textColor="#FFFFFF"
+            android:gravity="center" />
+    </LinearLayout>
+
+    <!-- 搜索类型 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="搜索类型："
+            android:textColor="#CCCCCC" />
+
+        <RadioGroup
+            android:id="@+id/radioSearchType"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/radioAlphaBeta"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="AlphaBeta"
+                android:textColor="#CCCCCC"
+                android:checked="true" />
+
+            <RadioButton
+                android:id="@+id/radioMCTS"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="MCTS"
+                android:textColor="#CCCCCC" />
+        </RadioGroup>
+    </LinearLayout>
+
+</LinearLayout>

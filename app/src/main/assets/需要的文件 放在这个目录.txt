@@ -1,0 +1,7 @@
+"pbrain-rapfi", "config.toml",
+                "mix9svqfreestyle_bsmix.bin.lz4",
+                "mix9svqrenju_bs15_black.bin.lz4",
+                "mix9svqrenju_bs15_white.bin.lz4",
+                "mix9svqstandard_bs15.bin.lz4",
+                "model210901.bin"
+               还有一个a.wav
