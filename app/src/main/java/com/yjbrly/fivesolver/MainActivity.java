@@ -2,10 +2,9 @@ package com.yjbrly.fivesolver;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.Context;
 import android.content.DialogInterface;
+import android.content.SharedPreferences;
 import android.content.res.AssetFileDescriptor;
-import android.content.res.AssetManager;
 import android.graphics.Color;
 import android.media.AudioManager;
 import android.media.SoundPool;
@@ -27,19 +26,12 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.Closeable;
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.LockSupport;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -70,7 +62,7 @@ public class MainActivity extends Activity {
 
     private final int currentThreads = 8;
     private int thinkTimeMs = 5000;
-    private int cautionFactor = 3;
+    private int cautionFactor = 0;   // 默认不谨慎，更强
     private String searchType = "alphabeta";
     private final int currentRule = 0;
     private final int boardSize = 15;
@@ -86,28 +78,164 @@ public class MainActivity extends Activity {
     private boolean engineBusy = true;
     private boolean newGameDialogVisible = false;
 
-
     private boolean multiAnalysisActive = false;
     private int currentPvIndex = -1;
     private int currentCandidateEval = 0;
     private double currentCandidateWinrate = 0;
     private String currentCandidateDepth = "";
 
-
     private boolean isReviewMode = false;
     private List<Point> recordedMoves = new ArrayList<Point>();
     private int reviewIndex = 0;
     private AtomicBoolean analyzingReview = new AtomicBoolean(false);
 
-    private static final Pattern MOVE_PATTERN = Pattern.compile("^\\d{1,2},\\d{1,2}$");
     private static final Pattern SGF_PATTERN = Pattern.compile("([a-o])(\\d{1,2})", Pattern.CASE_INSENSITIVE);
+
+    // ===== 首次启动 GPL 声明相关 =====
+    private static final String PREF_NAME = "app_prefs";
+    private static final String PREF_GPL_ACCEPTED = "gpl_accepted";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        initEngineAndStart();
+
+        if (hasAcceptedGpl()) {
+            initEngineAndStart();
+        } else {
+            showGplDialog();
+        }
     }
+
+    // ==================== GPL 声明 ====================
+
+    private boolean hasAcceptedGpl() {
+        SharedPreferences sp = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+        return sp.getBoolean(PREF_GPL_ACCEPTED, false);
+    }
+
+    private void showGplDialog() {
+        View boardV = findViewById(R.id.boardView);
+        if (boardV != null) boardV.setEnabled(false);
+        View newGameV = findViewById(R.id.btnNewGame);
+        if (newGameV != null) newGameV.setEnabled(false);
+
+        // 用自定义布局，避免 setMessage 长文本在某些设备上显示空白
+        View contentView = LayoutInflater.from(this).inflate(R.layout.dialog_gpl, null);
+        final TextView tvGplContent = (TextView) contentView.findViewById(R.id.tvGplContent);
+        tvGplContent.setText(buildGplMessage());
+
+        final AlertDialog dialog = new AlertDialog.Builder(this)
+			.setTitle("开源许可声明")
+			.setView(contentView)
+			.setCancelable(false)
+			.setPositiveButton("我同意", null)
+			.setNegativeButton("退出", null)
+			.create();
+
+        dialog.setOnShowListener(new DialogInterface.OnShowListener() {
+				@Override
+				public void onShow(DialogInterface d) {
+					// 让滚动条一开始就归到顶部
+					ScrollView sv = (ScrollView) ((View) tvGplContent.getParent());
+					if (sv != null) sv.scrollTo(0, 0);
+
+					Button posBtn = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+					Button negBtn = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+
+					if (posBtn != null) {
+						posBtn.setBackgroundResource(R.drawable.ios_button_bg);
+						posBtn.setTextColor(Color.WHITE);
+						posBtn.setOnClickListener(new View.OnClickListener() {
+								@Override
+								public void onClick(View v) {
+									getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+										.edit()
+										.putBoolean(PREF_GPL_ACCEPTED, true)
+										.apply();
+									dialog.dismiss();
+									initEngineAndStart();
+								}
+							});
+					}
+
+					if (negBtn != null) {
+						negBtn.setBackgroundResource(R.drawable.ios_button_bg);
+						negBtn.setTextColor(Color.WHITE);
+						negBtn.setOnClickListener(new View.OnClickListener() {
+								@Override
+								public void onClick(View v) {
+									dialog.dismiss();
+									finish();
+								}
+							});
+					}
+				}
+			});
+
+        dialog.show();
+    }
+
+    private String buildGplMessage() {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("本应用内嵌了以下开源组件：\n\n");
+        sb.append("────────────────────────\n");
+        sb.append("【Rapfi 五子棋引擎】\n");
+        sb.append("────────────────────────\n");
+        sb.append("作者：dhbloo 及贡献者\n");
+        sb.append("项目主页：\nhttps://github.com/dhbloo/rapfi\n\n");
+        sb.append("许可协议：\nGNU General Public License v3 (GPL v3)\n\n");
+        sb.append("Rapfi 是自由软件，您可以在 GPL v3 条款下自由使用、");
+        sb.append("修改和分发。任何分发行为必须附带完整源码，");
+        sb.append("修改后的代码也必须以 GPL v3 协议开源。\n\n");
+
+        sb.append("────────────────────────\n");
+        sb.append("【本应用】\n");
+        sb.append("开源地址：\nhttps://github.com/3453755574/-Solver\n");
+        sb.append("────────────────────────\n\n");
+        sb.append("All Rights Reserved.\n");
+        sb.append("保留所有权利。\n\n");
+        sb.append("已开源 ");
+        sb.append("点击「我同意」表示您已阅读并接受上述条款。\n\n");
+
+        // ============ 附加 assets/Copying.txt 完整许可证文本 ============
+        String copying = readCopyingFromAssets();
+        if (copying != null && !copying.trim().isEmpty()) {
+            sb.append("\n\n────────────────────────\n");
+            sb.append("【GPL v3 完整许可证文本】\n");
+            sb.append("(来自 assets/Copying.txt)\n");
+            sb.append("────────────────────────\n\n");
+            sb.append(copying);
+        } else {
+            sb.append("\n\n(提示：未找到 assets/Copying.txt，");
+            sb.append("完整许可证请见 https://www.gnu.org/licenses/gpl-3.0.txt)");
+        }
+
+        return sb.toString();
+    }
+
+    private String readCopyingFromAssets() {
+        InputStream is = null;
+        BufferedReader br = null;
+        try {
+            is = getAssets().open("Copying.txt");
+            br = new BufferedReader(new InputStreamReader(is, "UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) {
+                sb.append(line).append('\n');
+            }
+            return sb.toString();
+        } catch (IOException e) {
+            return null;
+        } finally {
+            try { if (br != null) br.close(); } catch (IOException ignored) {}
+            try { if (is != null) is.close(); } catch (IOException ignored) {}
+        }
+    }
+
+    // ==================== 引擎初始化 ====================
 
     private void initEngineAndStart() {
         boardView = (BoardView) findViewById(R.id.boardView);
@@ -131,216 +259,215 @@ public class MainActivity extends Activity {
         initSound();
 
         boardView.setOnCandidateClickListener(new BoardView.OnCandidateClickListener() {
-                @Override
-                public void onCandidateClick(int rank, int x, int y) {
-                    if (multiAnalysisActive && boardView.isMultiAnalysisComplete() && !aiThinking && !gameOver && engineReady && !engineBusy) {
-                        appendLog("选择候选点 #" + rank + " (" + coordToString(x, y) + ")");
-                        executeCandidateMove(x, y);
-                    }
-                }
-            });
+				@Override
+				public void onCandidateClick(int rank, int x, int y) {
+					if (multiAnalysisActive && boardView.isMultiAnalysisComplete() && !aiThinking && !gameOver && engineReady && !engineBusy) {
+						appendLog("选择候选点 #" + rank + " (" + coordToString(x, y) + ")");
+						executeCandidateMove(x, y);
+					}
+				}
+			});
 
         RapfiEngine.setLogger(new RapfiEngine.EngineLogger() {
-                @Override
-                public void onSend(final String line) {
-                    handler.post(new Runnable() {
-                            @Override
-                            public void run() {
-                                appendLog(">> " + line);
-                            }
-                        });
-                }
+				@Override
+				public void onSend(final String line) {
+					handler.post(new Runnable() {
+							@Override
+							public void run() {
+								appendLog(">> " + line);
+							}
+						});
+				}
 
-                @Override
-                public void onReceive(final String line) {
-                    handler.post(new Runnable() {
-                            @Override
-                            public void run() {
-                                appendLog("<< " + line);
-                                parseEngineMessage(line);
-                            }
-                        });
-                }
-            });
+				@Override
+				public void onReceive(final String line) {
+					handler.post(new Runnable() {
+							@Override
+							public void run() {
+								appendLog("<< " + line);
+								parseEngineMessage(line);
+							}
+						});
+				}
+			});
 
         btnMultiAnalysis.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    if (!engineReady || engineBusy || aiThinking || gameOver) {
-                        appendLog("引擎繁忙或未就绪，无法多点分析");
-                        return;
-                    }
-                    if (moveHistory.isEmpty()) {
-                        appendLog("棋盘上无棋子，请先落子或开始新局");
-                        return;
-                    }
-                    startMultiAnalysis();
-                }
-            });
+				@Override
+				public void onClick(View v) {
+					if (!engineReady || engineBusy || aiThinking || gameOver) {
+						appendLog("引擎繁忙或未就绪，无法多点分析");
+						return;
+					}
+					if (moveHistory.isEmpty()) {
+						appendLog("棋盘上无棋子，请先落子或开始新局");
+						return;
+					}
+					startMultiAnalysis();
+				}
+			});
 
         btnNewGame.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    if (newGameDialogVisible) return;
-                    if (!engineReady || engineBusy) {
-                        appendLog("引擎未就绪，无法新局");
-                        return;
-                    }
-                    if (aiThinking) {
-                        aiInterrupted = true;
-                        boardView.setEnabled(false);
-                        boardView.clearSelection();
-                    }
-                    stopMultiAnalysis();
-                    boardView.clearLostPoints();
-                    showNewGameDialog();
-                }
-            });
+				@Override
+				public void onClick(View v) {
+					if (newGameDialogVisible) return;
+					if (!engineReady || engineBusy) {
+						appendLog("引擎未就绪，无法新局");
+						return;
+					}
+					if (aiThinking) {
+						aiInterrupted = true;
+						boardView.setEnabled(false);
+						boardView.clearSelection();
+					}
+					stopMultiAnalysis();
+					boardView.clearLostPoints();
+					showNewGameDialog();
+				}
+			});
 
         btnUndo.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    if (isReviewMode) {
-                        appendLog("打谱模式下不能悔棋，请使用导航按钮");
-                        return;
-                    }
-                    if (!engineReady || engineBusy || aiThinking) {
-                        appendLog("引擎繁忙，无法悔棋");
-                        return;
-                    }
-                    if (moveHistory.size() < 2) {
-                        appendLog("至少需要两步才能悔棋");
-                        return;
-                    }
-                    stopMultiAnalysis();
-                    boardView.clearLostPoints();
-                    moveHistory.remove(moveHistory.size() - 1);
-                    moveHistory.remove(moveHistory.size() - 1);
-                    gameOver = false;
-                    boardView.setWinLine(null);
-                    boardView.clearSelection();
-                    boardView.clearHint();
-                    updateBoard();
-                    appendLog("悔棋两步");
-                    if (currentTurnIsAI()) {
-                        if (aiMoveRequested.compareAndSet(false, true)) {
-                            aiThinking = true;
-                            boardView.setEnabled(false);
-                            final List<Point> snapshot = new ArrayList<Point>(moveHistory);
-                            new Thread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        triggerAIMove(snapshot);
-                                    }
-                                }).start();
-                        }
-                    } else {
-                        boardView.setEnabled(true);
-                    }
-                }
-            });
+				@Override
+				public void onClick(View v) {
+					if (isReviewMode) {
+						appendLog("打谱模式下不能悔棋，请使用导航按钮");
+						return;
+					}
+					if (!engineReady || engineBusy || aiThinking) {
+						appendLog("引擎繁忙，无法悔棋");
+						return;
+					}
+					if (moveHistory.size() < 2) {
+						appendLog("至少需要两步才能悔棋");
+						return;
+					}
+					stopMultiAnalysis();
+					boardView.clearLostPoints();
+					moveHistory.remove(moveHistory.size() - 1);
+					moveHistory.remove(moveHistory.size() - 1);
+					gameOver = false;
+					boardView.setWinLine(null);
+					boardView.clearSelection();
+					boardView.clearHint();
+					updateBoard();
+					appendLog("悔棋两步");
+					if (currentTurnIsAI()) {
+						if (aiMoveRequested.compareAndSet(false, true)) {
+							aiThinking = true;
+							boardView.setEnabled(false);
+							final List<Point> snapshot = new ArrayList<Point>(moveHistory);
+							new Thread(new Runnable() {
+									@Override
+									public void run() {
+										triggerAIMove(snapshot);
+									}
+								}).start();
+						}
+					} else {
+						boardView.setEnabled(true);
+					}
+				}
+			});
 
         btnLoadSgf.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    if (!isReviewMode) {
-                        appendLog("请先通过「新对局」选择「打谱模式」");
-                        return;
-                    }
-                    loadSgfFromInput();
-                }
-            });
-
+				@Override
+				public void onClick(View v) {
+					if (!isReviewMode) {
+						appendLog("请先通过「新对局」选择「打谱模式」");
+						return;
+					}
+					loadSgfFromInput();
+				}
+			});
 
         btnPrevMove.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    if (!isReviewMode) return;
-                    if (analyzingReview.get()) {
-                        appendLog("正在分析中，请稍候...");
-                        return;
-                    }
-                    setAllInteractionsEnabled(false);
-                    if (reviewIndex > 0) {
-                        reviewIndex--;
-                        applyReviewStep();
-                    } else {
-                        appendLog("已到开局");
-                        setAllInteractionsEnabled(true);
-                    }
-                }
-            });
+				@Override
+				public void onClick(View v) {
+					if (!isReviewMode) return;
+					if (analyzingReview.get()) {
+						appendLog("正在分析中，请稍候...");
+						return;
+					}
+					setAllInteractionsEnabled(false);
+					if (reviewIndex > 0) {
+						reviewIndex--;
+						applyReviewStep();
+					} else {
+						appendLog("已到开局");
+						setAllInteractionsEnabled(true);
+					}
+				}
+			});
 
         btnNextMove.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    if (!isReviewMode) return;
-                    if (analyzingReview.get()) {
-                        appendLog("正在分析中，请稍候...");
-                        return;
-                    }
-                    setAllInteractionsEnabled(false);
-                    if (reviewIndex < recordedMoves.size()) {
-                        reviewIndex++;
-                        applyReviewStep();
-                    } else {
-                        appendLog("已到终局");
-                        setAllInteractionsEnabled(true);
-                    }
-                }
-            });
+				@Override
+				public void onClick(View v) {
+					if (!isReviewMode) return;
+					if (analyzingReview.get()) {
+						appendLog("正在分析中，请稍候...");
+						return;
+					}
+					setAllInteractionsEnabled(false);
+					if (reviewIndex < recordedMoves.size()) {
+						reviewIndex++;
+						applyReviewStep();
+					} else {
+						appendLog("已到终局");
+						setAllInteractionsEnabled(true);
+					}
+				}
+			});
 
         boardView.setOnMoveListener(new BoardView.OnMoveListener() {
-                @Override
-                public void onMove(int x, int y) {
-                    if (isReviewMode) {
-                        appendLog("打谱模式下不能落子，请使用导航");
-                        return;
-                    }
-                    if (analyzingReview.get()) {
-                        appendLog("正在分析中，禁止落子");
-                        return;
-                    }
-                    if (!boardView.isEnabled() || gameOver || aiThinking || !engineReady || engineBusy) {
-                        if (engineBusy || !boardView.isEnabled()) appendLog("引擎未就绪，请稍候...");
-                        return;
-                    }
-                    if (GameLogic.isGameFinished(moveHistory)) {
-                        gameOver = true;
-                        appendLog("游戏已结束，无法继续落子");
-                        boardView.setEnabled(false);
-                        return;
-                    }
-                    if (isHumanTurn()) {
-                        if (GameLogic.isOccupied(moveHistory, x, y)) {
-                            appendLog("此处已有棋子");
-                            return;
-                        }
-                        boardView.clearLostPoints();
-                        stopMultiAnalysis();
-                        moveHistory.add(new Point(x, y));
-                        updateBoard();
-                        playMoveSound();
-                        boardView.clearSelection();
-                        checkGameEnd();
-                        if (gameOver) return;
-                        if (!isHumanTurn()) {
-                            if (aiMoveRequested.compareAndSet(false, true)) {
-                                aiThinking = true;
-                                aiInterrupted = false;
-                                boardView.setEnabled(false);
-                                final List<Point> snapshot = new ArrayList<Point>(moveHistory);
-                                new Thread(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            triggerAIMove(snapshot);
-                                        }
-                                    }).start();
-                            }
-                        }
-                    }
-                }
-            });
+				@Override
+				public void onMove(int x, int y) {
+					if (isReviewMode) {
+						appendLog("打谱模式下不能落子，请使用导航");
+						return;
+					}
+					if (analyzingReview.get()) {
+						appendLog("正在分析中，禁止落子");
+						return;
+					}
+					if (!boardView.isEnabled() || gameOver || aiThinking || !engineReady || engineBusy) {
+						if (engineBusy || !boardView.isEnabled()) appendLog("引擎未就绪，请稍候...");
+						return;
+					}
+					if (GameLogic.isGameFinished(moveHistory)) {
+						gameOver = true;
+						appendLog("游戏已结束，无法继续落子");
+						boardView.setEnabled(false);
+						return;
+					}
+					if (isHumanTurn()) {
+						if (GameLogic.isOccupied(moveHistory, x, y)) {
+							appendLog("此处已有棋子");
+							return;
+						}
+						boardView.clearLostPoints();
+						stopMultiAnalysis();
+						moveHistory.add(new Point(x, y));
+						updateBoard();
+						playMoveSound();
+						boardView.clearSelection();
+						checkGameEnd();
+						if (gameOver) return;
+						if (!isHumanTurn()) {
+							if (aiMoveRequested.compareAndSet(false, true)) {
+								aiThinking = true;
+								aiInterrupted = false;
+								boardView.setEnabled(false);
+								final List<Point> snapshot = new ArrayList<Point>(moveHistory);
+								new Thread(new Runnable() {
+										@Override
+										public void run() {
+											triggerAIMove(snapshot);
+										}
+									}).start();
+							}
+						}
+					}
+				}
+			});
 
         GameLogic.setBoardSize(boardSize);
 
@@ -364,40 +491,39 @@ public class MainActivity extends Activity {
                 if (success) {
                     engineReady = true;
                     new Thread(new Runnable() {
-                            @Override
-                            public void run() {
-                                RapfiEngine engine = RapfiEngine.getInstance();
-                                engine.setBoardSize(boardSize);
-                                engine.setThreads(currentThreads);
-                                engine.setTimeLimitMs(thinkTimeMs);
-                                engine.setRule(currentRule);
-                                engine.setCautionFactor(cautionFactor);
-                                engine.setSearchType(searchType);
-                                final boolean started = engine.startIfNeeded();
-                                handler.post(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            if (started) {
-                                                appendLog("引擎就绪，请点击「新对局」开始");
-                                                engineBusy = false;
-                                                boardView.setEnabled(true);
-                                                updateUIMode();
-                                                setAllInteractionsEnabled(true);
-                                            } else {
-                                                appendLog("引擎启动失败，请检查 assets 中的引擎文件");
-                                                engineBusy = false;
-                                            }
-                                        }
-                                    });
-                            }
-                        }).start();
+							@Override
+							public void run() {
+								RapfiEngine engine = RapfiEngine.getInstance();
+								engine.setBoardSize(boardSize);
+								engine.setThreads(currentThreads);
+								engine.setTimeLimitMs(thinkTimeMs);
+								engine.setRule(currentRule);
+								engine.setCautionFactor(cautionFactor);
+								engine.setSearchType(searchType);
+								final boolean started = engine.startIfNeeded();
+								handler.post(new Runnable() {
+										@Override
+										public void run() {
+											if (started) {
+												appendLog("引擎就绪，请点击「新对局」开始");
+												engineBusy = false;
+												boardView.setEnabled(true);
+												updateUIMode();
+												setAllInteractionsEnabled(true);
+											} else {
+												appendLog("引擎启动失败，请检查 assets 中的引擎文件");
+												engineBusy = false;
+											}
+										}
+									});
+							}
+						}).start();
                 } else {
                     engineBusy = false;
                 }
             }
         }.execute();
     }
-
 
     private void syncAllConfigs() {
         RapfiEngine engine = RapfiEngine.getInstance();
@@ -412,8 +538,8 @@ public class MainActivity extends Activity {
         engine.setCautionFactor(cautionFactor);
         engine.setSearchType(searchType);
         engine.setRule(currentRule);
-        appendLog("配置已强制同步：思考时间=" + (thinkTimeMs/1000) + "秒，谨慎因子=" + cautionFactor +
-                  "，搜索类型=" + searchType + "，线程=" + currentThreads);
+        appendLog("配置已强制同步：思考时间=" + (thinkTimeMs / 1000) + "秒，谨慎因子=" + cautionFactor +
+				  "，搜索类型=" + searchType + "，线程=" + currentThreads);
     }
 
     private void setAllInteractionsEnabled(boolean enabled) {
@@ -430,8 +556,6 @@ public class MainActivity extends Activity {
             boardView.setEnabled(false);
         }
     }
-
-
 
     private void enterReviewMode() {
         if (isReviewMode) exitReviewMode();
@@ -575,32 +699,31 @@ public class MainActivity extends Activity {
 
         setAllInteractionsEnabled(false);
 
-
         syncAllConfigs();
 
         new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    boolean isBlackTurn = history.size() % 2 == 0;
-                    RapfiEngine engine = RapfiEngine.getInstance();
-                    long startTime = System.currentTimeMillis();
-                    final int[] bestMove = engine.getBestMove(history, isBlackTurn);
-                    final long elapsed = System.currentTimeMillis() - startTime;
+				@Override
+				public void run() {
+					boolean isBlackTurn = history.size() % 2 == 0;
+					RapfiEngine engine = RapfiEngine.getInstance();
+					long startTime = System.currentTimeMillis();
+					final int[] bestMove = engine.getBestMove(history, isBlackTurn);
+					final long elapsed = System.currentTimeMillis() - startTime;
 
-                    handler.post(new Runnable() {
-                            @Override
-                            public void run() {
-                                analyzingReview.set(false);
-                                setAllInteractionsEnabled(true);
-                                if (bestMove == null) {
-                                    appendLog("分析未返回有效着法（超时 " + (thinkTimeMs/1000) + " 秒，实际耗时 " + (elapsed/1000) + " 秒）");
-                                } else {
-                                    appendLog("分析完成，最佳着法：" + bestMove[0] + "," + bestMove[1] + "，耗时 " + (elapsed/1000) + " 秒");
-                                }
-                            }
-                        });
-                }
-            }).start();
+					handler.post(new Runnable() {
+							@Override
+							public void run() {
+								analyzingReview.set(false);
+								setAllInteractionsEnabled(true);
+								if (bestMove == null) {
+									appendLog("分析未返回有效着法（超时 " + (thinkTimeMs / 1000) + " 秒，实际耗时 " + (elapsed / 1000) + " 秒）");
+								} else {
+									appendLog("分析完成，最佳着法：" + bestMove[0] + "," + bestMove[1] + "，耗时 " + (elapsed / 1000) + " 秒");
+								}
+							}
+						});
+				}
+			}).start();
     }
 
     private List<Point> parseSgfMoves(String sgf) {
@@ -620,8 +743,6 @@ public class MainActivity extends Activity {
         return moves;
     }
 
-
-
     private void startMultiAnalysis() {
         stopMultiAnalysis();
         multiAnalysisActive = true;
@@ -635,12 +756,12 @@ public class MainActivity extends Activity {
         final boolean aiIsBlack = isBlackTurn;
 
         new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    RapfiEngine engine = RapfiEngine.getInstance();
-                    engine.getMultiBestMoves(historySnapshot, aiIsBlack, 3, thinkTimeMs, MainActivity.this);
-                }
-            }).start();
+				@Override
+				public void run() {
+					RapfiEngine engine = RapfiEngine.getInstance();
+					engine.getMultiBestMoves(historySnapshot, aiIsBlack, 3, thinkTimeMs, MainActivity.this);
+				}
+			}).start();
     }
 
     private void stopMultiAnalysis() {
@@ -655,25 +776,25 @@ public class MainActivity extends Activity {
     public void onMultiAnalysisCandidate(final int rank, final int x, final int y,
                                          final int eval, final double winrate, final String depth) {
         handler.post(new Runnable() {
-                @Override
-                public void run() {
-                    if (!multiAnalysisActive) return;
-                    BoardView.CandidatePoint cp = new BoardView.CandidatePoint(x, y, eval, winrate, depth);
-                    boardView.updateCandidate(cp);
-                }
-            });
+				@Override
+				public void run() {
+					if (!multiAnalysisActive) return;
+					BoardView.CandidatePoint cp = new BoardView.CandidatePoint(x, y, eval, winrate, depth);
+					boardView.updateCandidate(cp);
+				}
+			});
     }
 
     public void onMultiAnalysisComplete(final int count) {
         handler.post(new Runnable() {
-                @Override
-                public void run() {
-                    if (!multiAnalysisActive) return;
-                    boardView.setMultiAnalysisComplete(true);
-                    appendLog("多点分析完成，共 " + count + " 个候选点");
-                    appendLog("点击棋盘上的彩色圆圈选择落子");
-                }
-            });
+				@Override
+				public void run() {
+					if (!multiAnalysisActive) return;
+					boardView.setMultiAnalysisComplete(true);
+					appendLog("多点分析完成，共 " + count + " 个候选点");
+					appendLog("点击棋盘上的彩色圆圈选择落子");
+				}
+			});
     }
 
     private void executeCandidateMove(int x, int y) {
@@ -704,11 +825,11 @@ public class MainActivity extends Activity {
                 boardView.setEnabled(false);
                 final List<Point> snapshot = new ArrayList<Point>(moveHistory);
                 new Thread(new Runnable() {
-                        @Override
-                        public void run() {
-                            triggerAIMove(snapshot);
-                        }
-                    }).start();
+						@Override
+						public void run() {
+							triggerAIMove(snapshot);
+						}
+					}).start();
             }
         }
     }
@@ -717,14 +838,12 @@ public class MainActivity extends Activity {
         return "" + (char) ('A' + x) + (y + 1);
     }
 
-
     private void showNewGameDialog() {
         newGameDialogVisible = true;
         btnNewGame.setEnabled(false);
 
         LayoutInflater inflater = LayoutInflater.from(this);
         final View view = inflater.inflate(R.layout.dialog_new_game, null);
-
 
         final RadioGroup radioGroup = (RadioGroup) view.findViewById(R.id.radioGroup);
         final SeekBar seekTime = (SeekBar) view.findViewById(R.id.seekTime);
@@ -747,7 +866,8 @@ public class MainActivity extends Activity {
         seekTime.setProgress(timeSec - 1);
         tvTimeValue.setText(timeSec + "秒");
 
-        seekCaution.setProgress(cautionFactor - 1);
+        // 谨慎因子允许 0 起始
+        seekCaution.setProgress(Math.max(0, cautionFactor));
         tvCautionValue.setText(String.valueOf(cautionFactor));
 
         if ("mcts".equals(searchType)) {
@@ -757,110 +877,102 @@ public class MainActivity extends Activity {
         }
 
         seekTime.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-                @Override
-                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                    tvTimeValue.setText((progress + 1) + "秒");
-                }
+				@Override
+				public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+					tvTimeValue.setText((progress + 1) + "秒");
+				}
 
-                @Override
-                public void onStartTrackingTouch(SeekBar seekBar) {}
-
-                @Override
-                public void onStopTrackingTouch(SeekBar seekBar) {}
-            });
+				@Override public void onStartTrackingTouch(SeekBar seekBar) {}
+				@Override public void onStopTrackingTouch(SeekBar seekBar) {}
+			});
 
         seekCaution.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-                @Override
-                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                    tvCautionValue.setText(String.valueOf(progress + 1));
-                }
+				@Override
+				public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+					tvCautionValue.setText(String.valueOf(progress));
+				}
 
-                @Override
-                public void onStartTrackingTouch(SeekBar seekBar) {}
-
-                @Override
-                public void onStopTrackingTouch(SeekBar seekBar) {}
-            });
+				@Override public void onStartTrackingTouch(SeekBar seekBar) {}
+				@Override public void onStopTrackingTouch(SeekBar seekBar) {}
+			});
 
         final AlertDialog dialog = new AlertDialog.Builder(this)
-            .setView(view)
-            .setPositiveButton("开始", null)
-            .setNegativeButton("取消", null)
-            .setCancelable(false)
-            .create();
+			.setView(view)
+			.setPositiveButton("开始", null)
+			.setNegativeButton("取消", null)
+			.setCancelable(false)
+			.create();
 
         dialog.setOnShowListener(new DialogInterface.OnShowListener() {
-                @Override
-                public void onShow(DialogInterface d) {
-                    Button posBtn = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
-                    Button negBtn = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+				@Override
+				public void onShow(DialogInterface d) {
+					Button posBtn = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+					Button negBtn = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
 
-                    if (posBtn != null) {
-                        posBtn.setBackgroundResource(R.drawable.ios_button_bg);
-                        posBtn.setTextColor(Color.WHITE);
-                        posBtn.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
+					if (posBtn != null) {
+						posBtn.setBackgroundResource(R.drawable.ios_button_bg);
+						posBtn.setTextColor(Color.WHITE);
+						posBtn.setOnClickListener(new View.OnClickListener() {
+								@Override
+								public void onClick(View v) {
+									thinkTimeMs = (seekTime.getProgress() + 1) * 1000;
+									cautionFactor = seekCaution.getProgress();
+									int searchTypeId = radioSearchType.getCheckedRadioButtonId();
+									searchType = (searchTypeId == R.id.radioMCTS) ? "mcts" : "alphabeta";
 
-                                    thinkTimeMs = (seekTime.getProgress() + 1) * 1000;
-                                    cautionFactor = seekCaution.getProgress() + 1;
-                                    int searchTypeId = radioSearchType.getCheckedRadioButtonId();
-                                    searchType = (searchTypeId == R.id.radioMCTS) ? "mcts" : "alphabeta";
+									if (engineReady) {
+										syncAllConfigs();
+									}
 
+									int checkedId = radioGroup.getCheckedRadioButtonId();
+									if (checkedId == R.id.radioReview) {
+										if (!isReviewMode) enterReviewMode();
+										else {
+											exitReviewMode();
+											enterReviewMode();
+										}
+										dialog.dismiss();
+										return;
+									}
 
-                                    if (engineReady) {
-                                        syncAllConfigs();
-                                    }
-
-                                    int checkedId = radioGroup.getCheckedRadioButtonId();
-                                    if (checkedId == R.id.radioReview) {
-                                        if (!isReviewMode) enterReviewMode();
-                                        else {
-                                            exitReviewMode();
-                                            enterReviewMode();
-                                        }
-                                        dialog.dismiss();
-                                        return;
-                                    }
-
-                                    if (isReviewMode) exitReviewMode();
-                                    if (checkedId == R.id.radioBlack) {
-                                        aiControlBlack[0] = false;
-                                        aiControlWhite[0] = true;
-                                    } else {
-                                        aiControlBlack[0] = true;
-                                        aiControlWhite[0] = false;
-                                    }
-                                    dialog.dismiss();
-                                    newGame();
-                                }
-                            });
-                    }
-                    if (negBtn != null) {
-                        negBtn.setBackgroundResource(R.drawable.ios_button_bg);
-                        negBtn.setTextColor(Color.WHITE);
-                        negBtn.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                    dialog.dismiss();
-                                }
-                            });
-                    }
-                }
-            });
+									if (isReviewMode) exitReviewMode();
+									if (checkedId == R.id.radioBlack) {
+										aiControlBlack[0] = false;
+										aiControlWhite[0] = true;
+									} else {
+										aiControlBlack[0] = true;
+										aiControlWhite[0] = false;
+									}
+									dialog.dismiss();
+									newGame();
+								}
+							});
+					}
+					if (negBtn != null) {
+						negBtn.setBackgroundResource(R.drawable.ios_button_bg);
+						negBtn.setTextColor(Color.WHITE);
+						negBtn.setOnClickListener(new View.OnClickListener() {
+								@Override
+								public void onClick(View v) {
+									dialog.dismiss();
+								}
+							});
+					}
+				}
+			});
 
         dialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
-                @Override
-                public void onDismiss(DialogInterface d) {
-                    newGameDialogVisible = false;
-                    if (engineReady && !engineBusy) {
-                        btnNewGame.setEnabled(true);
-                    }
-                    if (!gameOver && !aiThinking && isHumanTurn() && !isReviewMode) {
-                        boardView.setEnabled(true);
-                    }
-                }
-            });
+				@Override
+				public void onDismiss(DialogInterface d) {
+					newGameDialogVisible = false;
+					if (engineReady && !engineBusy) {
+						btnNewGame.setEnabled(true);
+					}
+					if (!gameOver && !aiThinking && isHumanTurn() && !isReviewMode) {
+						boardView.setEnabled(true);
+					}
+				}
+			});
 
         dialog.show();
     }
@@ -882,44 +994,44 @@ public class MainActivity extends Activity {
         updateBoard();
 
         new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    RapfiEngine engine = RapfiEngine.getInstance();
-                    engine.restart();
-                    engine.setCautionFactor(cautionFactor);
-                    engine.setSearchType(searchType);
-                    engine.setRule(currentRule);
-                    engine.setTimeLimitMs(thinkTimeMs);
-                    engine.updateTimeout();
+				@Override
+				public void run() {
+					RapfiEngine engine = RapfiEngine.getInstance();
+					engine.restart();
+					engine.setCautionFactor(cautionFactor);
+					engine.setSearchType(searchType);
+					engine.setRule(currentRule);
+					engine.setTimeLimitMs(thinkTimeMs);
+					engine.updateTimeout();
 
-                    handler.post(new Runnable() {
-                            @Override
-                            public void run() {
-                                appendLog("新游戏，您执" + (aiControlBlack[0] ? "白" : "黑") +
-                                          "，AI执" + (aiControlBlack[0] ? "黑" : "白") +
-                                          "，规则：无禁手，思考时间：" + (thinkTimeMs / 1000) + "秒" +
-                                          "，谨慎因子：" + cautionFactor +
-                                          "，搜索类型：" + searchType);
-                                engineBusy = false;
-                                if (currentTurnIsAI()) {
-                                    if (aiMoveRequested.compareAndSet(false, true)) {
-                                        aiThinking = true;
-                                        boardView.setEnabled(false);
-                                        final List<Point> snapshot = new ArrayList<Point>(moveHistory);
-                                        new Thread(new Runnable() {
-                                                @Override
-                                                public void run() {
-                                                    triggerAIMove(snapshot);
-                                                }
-                                            }).start();
-                                    }
-                                } else {
-                                    boardView.setEnabled(true);
-                                }
-                            }
-                        });
-                }
-            }).start();
+					handler.post(new Runnable() {
+							@Override
+							public void run() {
+								appendLog("新游戏，您执" + (aiControlBlack[0] ? "白" : "黑") +
+										  "，AI执" + (aiControlBlack[0] ? "黑" : "白") +
+										  "，规则：无禁手，思考时间：" + (thinkTimeMs / 1000) + "秒" +
+										  "，谨慎因子：" + cautionFactor +
+										  "，搜索类型：" + searchType);
+								engineBusy = false;
+								if (currentTurnIsAI()) {
+									if (aiMoveRequested.compareAndSet(false, true)) {
+										aiThinking = true;
+										boardView.setEnabled(false);
+										final List<Point> snapshot = new ArrayList<Point>(moveHistory);
+										new Thread(new Runnable() {
+												@Override
+												public void run() {
+													triggerAIMove(snapshot);
+												}
+											}).start();
+									}
+								} else {
+									boardView.setEnabled(true);
+								}
+							}
+						});
+				}
+			}).start();
     }
 
     private boolean currentTurnIsAI() {
@@ -935,22 +1047,22 @@ public class MainActivity extends Activity {
         if (isReviewMode) return;
         if (analyzingReview.get()) {
             handler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        appendLog("正在分析中，AI暂不落子");
-                    }
-                });
+					@Override
+					public void run() {
+						appendLog("正在分析中，AI暂不落子");
+					}
+				});
             return;
         }
         if (!currentTurnIsAI()) {
             handler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        aiThinking = false;
-                        aiMoveRequested.set(false);
-                        boardView.setEnabled(true);
-                    }
-                });
+					@Override
+					public void run() {
+						aiThinking = false;
+						aiMoveRequested.set(false);
+						boardView.setEnabled(true);
+					}
+				});
             return;
         }
 
@@ -959,61 +1071,61 @@ public class MainActivity extends Activity {
         final int[] move = RapfiEngine.getInstance().getBestMove(snapshot, aiIsBlack);
 
         handler.post(new Runnable() {
-                @Override
-                public void run() {
-                    if (move != null) {
-                        if (GameLogic.isGameFinished(moveHistory)) {
-                            gameOver = true;
-                            aiMoveRequested.set(false);
-                            boardView.setEnabled(false);
-                            return;
-                        }
-                        if (GameLogic.isOccupied(moveHistory, move[0], move[1])) {
-                            appendLog("AI尝试在已有棋子的位置落子，忽略");
-                            aiMoveRequested.set(false);
-                            boardView.setEnabled(true);
-                            return;
-                        }
-                        boardView.clearLostPoints();
-                        moveHistory.add(new Point(move[0], move[1]));
-                        updateBoard();
-                        boardView.clearSelection();
-                        boardView.clearHint();
-                        appendLog("AI落子(" + (aiIsBlack ? "黑" : "白") + "): " + move[0] + "," + move[1]);
-                        playMoveSound();
-                        checkGameEnd();
-                        if (gameOver) {
-                            aiMoveRequested.set(false);
-                            return;
-                        }
-                        if (currentTurnIsAI() && !aiInterrupted) {
-                            if (aiMoveRequested.compareAndSet(false, true)) {
-                                aiThinking = true;
-                                final List<Point> newSnapshot = new ArrayList<Point>(moveHistory);
-                                new Thread(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            triggerAIMove(newSnapshot);
-                                        }
-                                    }).start();
-                            }
-                        } else {
-                            aiThinking = false;
-                            aiMoveRequested.set(false);
-                            boardView.setEnabled(true);
-                        }
-                    } else {
-                        if (aiInterrupted) {
-                            appendLog("AI思考被中断，未返回有效着法");
-                        } else {
-                            appendLog("AI计算失败");
-                        }
-                        aiThinking = false;
-                        aiMoveRequested.set(false);
-                        boardView.setEnabled(true);
-                    }
-                }
-            });
+				@Override
+				public void run() {
+					if (move != null) {
+						if (GameLogic.isGameFinished(moveHistory)) {
+							gameOver = true;
+							aiMoveRequested.set(false);
+							boardView.setEnabled(false);
+							return;
+						}
+						if (GameLogic.isOccupied(moveHistory, move[0], move[1])) {
+							appendLog("AI尝试在已有棋子的位置落子，忽略");
+							aiMoveRequested.set(false);
+							boardView.setEnabled(true);
+							return;
+						}
+						boardView.clearLostPoints();
+						moveHistory.add(new Point(move[0], move[1]));
+						updateBoard();
+						boardView.clearSelection();
+						boardView.clearHint();
+						appendLog("AI落子(" + (aiIsBlack ? "黑" : "白") + "): " + move[0] + "," + move[1]);
+						playMoveSound();
+						checkGameEnd();
+						if (gameOver) {
+							aiMoveRequested.set(false);
+							return;
+						}
+						if (currentTurnIsAI() && !aiInterrupted) {
+							if (aiMoveRequested.compareAndSet(false, true)) {
+								aiThinking = true;
+								final List<Point> newSnapshot = new ArrayList<Point>(moveHistory);
+								new Thread(new Runnable() {
+										@Override
+										public void run() {
+											triggerAIMove(newSnapshot);
+										}
+									}).start();
+							}
+						} else {
+							aiThinking = false;
+							aiMoveRequested.set(false);
+							boardView.setEnabled(true);
+						}
+					} else {
+						if (aiInterrupted) {
+							appendLog("AI思考被中断，未返回有效着法");
+						} else {
+							appendLog("AI计算失败");
+						}
+						aiThinking = false;
+						aiMoveRequested.set(false);
+						boardView.setEnabled(true);
+					}
+				}
+			});
     }
 
     private void checkGameEnd() {
@@ -1055,11 +1167,11 @@ public class MainActivity extends Activity {
             tvLog.getEditableText().delete(0, end);
         }
         scrollLog.post(new Runnable() {
-                @Override
-                public void run() {
-                    scrollLog.fullScroll(View.FOCUS_DOWN);
-                }
-            });
+				@Override
+				public void run() {
+					scrollLog.fullScroll(View.FOCUS_DOWN);
+				}
+			});
     }
 
     private void appendLog(CharSequence text) {
@@ -1070,28 +1182,27 @@ public class MainActivity extends Activity {
             tvLog.getEditableText().delete(0, end);
         }
         scrollLog.post(new Runnable() {
-                @Override
-                public void run() {
-                    scrollLog.fullScroll(View.FOCUS_DOWN);
-                }
-            });
+				@Override
+				public void run() {
+					scrollLog.fullScroll(View.FOCUS_DOWN);
+				}
+			});
     }
-
 
     private void initSound() {
         try {
             soundPool = new SoundPool(1, AudioManager.STREAM_MUSIC, 0);
             soundPool.setOnLoadCompleteListener(new SoundPool.OnLoadCompleteListener() {
-                    @Override
-                    public void onLoadComplete(SoundPool soundPool, int sampleId, int status) {
-                        if (status == 0) {
-                            soundLoaded = true;
-                            appendLog("音效加载成功");
-                        } else {
-                            appendLog("音效加载失败，状态码：" + status);
-                        }
-                    }
-                });
+					@Override
+					public void onLoadComplete(SoundPool soundPool, int sampleId, int status) {
+						if (status == 0) {
+							soundLoaded = true;
+							appendLog("音效加载成功");
+						} else {
+							appendLog("音效加载失败，状态码：" + status);
+						}
+					}
+				});
             AssetFileDescriptor afd = getAssets().openFd("a.wav");
             soundId = soundPool.load(afd, 1);
         } catch (IOException e) {
@@ -1106,7 +1217,6 @@ public class MainActivity extends Activity {
         }
     }
 
-
     private void parseEngineMessage(String line) {
         if (line.startsWith("MESSAGE REALTIME LOST ")) {
             try {
@@ -1117,11 +1227,11 @@ public class MainActivity extends Activity {
                     final int y = Integer.parseInt(parts[1].trim());
                     if (x >= 0 && x < boardSize && y >= 0 && y < boardSize) {
                         handler.post(new Runnable() {
-                                @Override
-                                public void run() {
-                                    boardView.addLostPoint(x, y);
-                                }
-                            });
+								@Override
+								public void run() {
+									boardView.addLostPoint(x, y);
+								}
+							});
                     }
                 }
             } catch (Exception ignored) {}
@@ -1135,11 +1245,11 @@ public class MainActivity extends Activity {
                     double wr = Double.parseDouble(parts[2]);
                     final String winrateStr = String.format("胜率：%.2f%%", wr * 100);
                     handler.post(new Runnable() {
-                            @Override
-                            public void run() {
-                                tvEval.setText(winrateStr);
-                            }
-                        });
+							@Override
+							public void run() {
+								tvEval.setText(winrateStr);
+							}
+						});
                 }
             } catch (Exception ignored) {}
             return;
@@ -1181,12 +1291,12 @@ public class MainActivity extends Activity {
                         final double fwinrate = currentCandidateWinrate;
                         final String fdepth = currentCandidateDepth;
                         handler.post(new Runnable() {
-                                @Override
-                                public void run() {
-                                    if (!multiAnalysisActive) return;
-                                    onMultiAnalysisCandidate(rank, fx, fy, feval, fwinrate, fdepth);
-                                }
-                            });
+								@Override
+								public void run() {
+									if (!multiAnalysisActive) return;
+									onMultiAnalysisCandidate(rank, fx, fy, feval, fwinrate, fdepth);
+								}
+							});
                     }
                 }
             } catch (Exception ignored) {}
@@ -1206,11 +1316,11 @@ public class MainActivity extends Activity {
                             currentCandidateDepth = depthStr;
                             final String depth = depthStr;
                             handler.post(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        tvDepth.setText("搜索层数：" + depth);
-                                    }
-                                });
+									@Override
+									public void run() {
+										tvDepth.setText("搜索层数：" + depth);
+									}
+								});
                         }
                     }
                 }
@@ -1261,438 +1371,8 @@ public class MainActivity extends Activity {
         RapfiEngine.getInstance().stop();
     }
 
-
     public static class Point {
         public int x, y;
         public Point(int x, int y) { this.x = x; this.y = y; }
-    }
-
-    public static class GameLogic {
-        public static final int BLACK = 0, WHITE = 1;
-        private static int boardSize = 15;
-
-        public static void setBoardSize(int size) { boardSize = size; }
-
-        public static boolean isOccupied(List<Point> moves, int x, int y) {
-            for (Point p : moves) {
-                if (p.x == x && p.y == y) return true;
-            }
-            return false;
-        }
-
-        public static boolean isGameFinished(List<Point> moves) {
-            return isFiveInRow(moves) || moves.size() == boardSize * boardSize;
-        }
-
-        public static boolean isFiveInRow(List<Point> moves) {
-            if (moves.isEmpty()) return false;
-            int lastX = moves.get(moves.size() - 1).x;
-            int lastY = moves.get(moves.size() - 1).y;
-            int color = (moves.size() - 1) % 2;
-            return checkWin(moves, lastX, lastY, color);
-        }
-
-        private static boolean checkWin(List<Point> moves, int x, int y, int color) {
-            int[][] dirs = {{1,0},{0,1},{1,1},{1,-1}};
-            for (int[] d : dirs) {
-                int count = 1;
-                for (int step = 1; step <= 5; step++) {
-                    int nx = x + d[0] * step, ny = y + d[1] * step;
-                    if (!isValid(nx, ny)) break;
-                    if (getColorAt(moves, nx, ny) == color) count++;
-                    else break;
-                }
-                for (int step = 1; step <= 5; step++) {
-                    int nx = x - d[0] * step, ny = y - d[1] * step;
-                    if (!isValid(nx, ny)) break;
-                    if (getColorAt(moves, nx, ny) == color) count++;
-                    else break;
-                }
-                if (count >= 5) return true;
-            }
-            return false;
-        }
-
-        private static int getColorAt(List<Point> moves, int x, int y) {
-            for (int i = 0; i < moves.size(); i++) {
-                Point p = moves.get(i);
-                if (p.x == x && p.y == y) return i % 2;
-            }
-            return -1;
-        }
-
-        private static boolean isValid(int x, int y) {
-            return x >= 0 && x < boardSize && y >= 0 && y < boardSize;
-        }
-
-        public static int[][] getWinningLine(List<Point> moves) {
-            if (moves.isEmpty()) return null;
-            int lastX = moves.get(moves.size() - 1).x;
-            int lastY = moves.get(moves.size() - 1).y;
-            int color = (moves.size() - 1) % 2;
-            int[][] dirs = {{1,0},{0,1},{1,1},{1,-1}};
-            for (int[] d : dirs) {
-                ArrayList<int[]> forward = new ArrayList<int[]>();
-                ArrayList<int[]> backward = new ArrayList<int[]>();
-                for (int step = 1; step <= 5; step++) {
-                    int nx = lastX + d[0] * step, ny = lastY + d[1] * step;
-                    if (!isValid(nx, ny) || getColorAt(moves, nx, ny) != color) break;
-                    forward.add(new int[]{nx, ny});
-                }
-                for (int step = 1; step <= 5; step++) {
-                    int nx = lastX - d[0] * step, ny = lastY - d[1] * step;
-                    if (!isValid(nx, ny) || getColorAt(moves, nx, ny) != color) break;
-                    backward.add(new int[]{nx, ny});
-                }
-                if (forward.size() + backward.size() + 1 >= 5) {
-                    ArrayList<int[]> line = new ArrayList<int[]>();
-                    for (int j = backward.size() - 1; j >= 0; j--) line.add(backward.get(j));
-                    line.add(new int[]{lastX, lastY});
-                    for (int j = 0; j < forward.size(); j++) line.add(forward.get(j));
-                    return line.toArray(new int[line.size()][2]);
-                }
-            }
-            return null;
-        }
-    }
-
-    public static class RapfiEngine {
-        private static final int IO_BUFFER_SIZE = 1024 * 1024;
-        private static final long EXTRA_WAIT_MS = 12000L;
-
-        private static EngineLogger logger;
-        private static File engineBaseDir;
-        private static RapfiEngine instance;
-
-        public interface EngineLogger {
-            void onSend(String line);
-            void onReceive(String line);
-        }
-
-        public static void setLogger(EngineLogger l) { logger = l; }
-
-        public static void init(Context context, String assetSubPath) {
-            File filesDir = context.getFilesDir();
-            engineBaseDir = new File(filesDir, "engine");
-            if (!engineBaseDir.exists()) engineBaseDir.mkdirs();
-            copyEngineAssets(context, assetSubPath);
-        }
-
-        private static void copyEngineAssets(Context ctx, String assetSubPath) {
-            AssetManager am = ctx.getAssets();
-            String[] filesToCopy = {
-                "pbrain-rapfi", "config.toml",
-                "mix9svqfreestyle_bsmix.bin.lz4",
-                "mix9svqrenju_bs15_black.bin.lz4",
-                "mix9svqrenju_bs15_white.bin.lz4",
-                "mix9svqstandard_bs15.bin.lz4",
-                "model210901.bin"
-            };
-            byte[] buf = new byte[65536];
-            for (String fileName : filesToCopy) {
-                File dest = new File(engineBaseDir, fileName);
-                if (dest.exists()) continue;
-                InputStream in = null;
-                OutputStream out = null;
-                try {
-                    if (assetSubPath != null && !assetSubPath.isEmpty()) {
-                        in = am.open(assetSubPath + "/" + fileName);
-                    } else {
-                        in = am.open(fileName);
-                    }
-                    out = new FileOutputStream(dest);
-                    int len;
-                    while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
-                    if (logger != null) logger.onReceive("[引擎] 复制文件: " + fileName);
-                } catch (IOException e) {
-                    if (logger != null)
-                        logger.onReceive("[引擎] 跳过文件: " + fileName + " (" + e.getMessage() + ")");
-                } finally {
-                    closeQuietly(in);
-                    closeQuietly(out);
-                }
-            }
-            File exe = new File(engineBaseDir, "pbrain-rapfi");
-            if (exe.exists()) exe.setExecutable(true);
-        }
-
-        public static synchronized RapfiEngine getInstance() {
-            if (instance == null) instance = new RapfiEngine();
-            return instance;
-        }
-
-        private Process process;
-        private BufferedWriter stdin;
-        private BufferedReader stdout;
-        private final Object ioLock = new Object();
-        private final AtomicBoolean started = new AtomicBoolean(false);
-        private volatile boolean stdinClosed = true, stdoutClosed = true;
-        private volatile int currentTimeLimit = 5000;
-        private volatile int currentThreads = 8;
-        private volatile int currentRule = 0;
-        private volatile int currentCautionFactor = 3;
-        private volatile String currentSearchType = "alphabeta";
-        private volatile int boardSize = 15;
-
-        private RapfiEngine() {}
-
-        public void setBoardSize(int size) { boardSize = size; }
-        public void setThreads(int threads) { currentThreads = threads; }
-        public void setTimeLimitMs(int ms) {
-            this.currentTimeLimit = ms;
-        }
-        public void setRule(int rule) {
-            currentRule = rule;
-            synchronized (ioLock) {
-                try { sendLineLocked("info rule " + rule); } catch (IOException ignored) {}
-            }
-        }
-        public void setCautionFactor(int factor) {
-            currentCautionFactor = factor;
-            synchronized (ioLock) {
-                try { sendLineLocked("info caution_factor " + factor); } catch (IOException ignored) {}
-            }
-        }
-        public void setSearchType(String type) {
-            currentSearchType = type;
-            synchronized (ioLock) {
-                try { sendLineLocked("INFO search_type " + type); } catch (IOException ignored) {}
-            }
-        }
-        public void updateTimeout() {
-            synchronized (ioLock) {
-                try { sendLineLocked("info timeout_turn " + currentTimeLimit); } catch (IOException ignored) {}
-            }
-        }
-
-        public boolean startIfNeeded() {
-            if (started.get() && process != null && isProcessAlive(process)) return true;
-            synchronized (ioLock) {
-                if (started.get() && process != null && isProcessAlive(process)) return true;
-                if (process != null) { process.destroy(); waitForProcess(process, 300); process = null; }
-                closeQuietly(stdout); closeQuietly(stdin);
-                stdinClosed = true; stdoutClosed = true;
-                started.set(false);
-                try {
-                    File exe = new File(engineBaseDir, "pbrain-rapfi");
-                    if (!exe.exists() || !exe.canExecute()) {
-                        if (logger != null) logger.onReceive("[引擎] 可执行文件不存在或不可执行: " + exe.getAbsolutePath());
-                        return false;
-                    }
-                    ProcessBuilder pb = new ProcessBuilder(exe.getAbsolutePath());
-                    pb.directory(engineBaseDir);
-                    pb.redirectErrorStream(true);
-                    process = pb.start();
-                    stdin = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), "UTF-8"), IO_BUFFER_SIZE);
-                    stdout = new BufferedReader(new InputStreamReader(process.getInputStream(), "UTF-8"), IO_BUFFER_SIZE);
-                    stdinClosed = false; stdoutClosed = false;
-
-                    sendLineLocked("START " + boardSize);
-                    sendLineLocked("info thread_num " + currentThreads);
-                    sendLineLocked("info timeout_turn " + currentTimeLimit);
-                    sendLineLocked("info rule " + currentRule);
-                    sendLineLocked("info caution_factor " + currentCautionFactor);
-                    sendLineLocked("INFO search_type " + currentSearchType);
-                    sendLineLocked("yxboard");
-                    sendLineLocked("done");
-                    sendLineLocked("yxshowforbid");
-                    sendLineLocked("INFO show_detail 3");
-
-                    drainRemainingLines();
-                    started.set(true);
-                    return true;
-                } catch (Exception e) {
-                    if (logger != null) logger.onReceive("[引擎] 启动失败: " + e);
-                    return false;
-                }
-            }
-        }
-
-        private void sendLineLocked(String line) throws IOException {
-            if (stdin == null || stdinClosed) return;
-            stdin.write(line); stdin.write("\n\r"); stdin.flush();
-            if (logger != null) logger.onSend(line);
-        }
-
-        public int[] getBestMove(List<Point> history, boolean aiIsBlack) {
-            if (!startIfNeeded()) return null;
-            synchronized (ioLock) {
-                try {
-                    drainRemainingLines();
-                    StringBuilder boardStr = new StringBuilder("board\r\n");
-                    for (int i = 0; i < history.size(); i++) {
-                        Point p = history.get(i);
-                        int type = (i % 2 == 0) == aiIsBlack ? 1 : 2;
-                        boardStr.append(p.x).append(',').append(p.y).append(',').append(type).append("\n\r");
-                    }
-                    boardStr.append("DONE\n\r");
-                    sendLineLocked(boardStr.toString().trim());
-
-                    long deadline = System.currentTimeMillis() + currentTimeLimit + EXTRA_WAIT_MS;
-                    int[] move = readMove(deadline);
-                    drainRemainingLines();
-                    return move;
-                } catch (IOException e) {
-                    return null;
-                }
-            }
-        }
-
-        public void getMultiBestMoves(List<Point> history, boolean aiIsBlack, int n, int timeLimitMs, final MainActivity callback) {
-            if (!startIfNeeded()) {
-                callback.onMultiAnalysisComplete(0);
-                return;
-            }
-            synchronized (ioLock) {
-                try {
-                    drainRemainingLines();
-                    sendLineLocked("YXNBEST " + n);
-                    StringBuilder boardStr = new StringBuilder("board\r\n");
-                    for (int i = 0; i < history.size(); i++) {
-                        Point p = history.get(i);
-                        int type = (i % 2 == 0) == aiIsBlack ? 1 : 2;
-                        boardStr.append(p.x).append(',').append(p.y).append(',').append(type).append("\n\r");
-                    }
-                    boardStr.append("DONE\n\r");
-                    sendLineLocked(boardStr.toString().trim());
-
-                    long deadline = System.currentTimeMillis() + timeLimitMs + EXTRA_WAIT_MS;
-                    int candidateCount = 0;
-                    int currentPv = -1, currentEval = 0;
-                    double currentWinrate = 0;
-                    String currentDepth = "";
-
-                    while (System.currentTimeMillis() < deadline) {
-                        if (stdoutClosed || stdout == null) break;
-                        if (stdout.ready()) {
-                            String line = stdout.readLine();
-                            if (line == null) { closeQuietly(stdout); stdoutClosed = true; break; }
-                            line = line.trim();
-                            if (logger != null) logger.onReceive(line);
-
-                            if (line.startsWith("INFO PV ")) {
-                                try { currentPv = Integer.parseInt(line.substring(8).trim()); } catch (Exception ignored) {}
-                            } else if (line.startsWith("INFO EVAL ")) {
-                                try { currentEval = Integer.parseInt(line.substring(10).trim()); } catch (Exception ignored) {}
-                            } else if (line.startsWith("INFO WINRATE ")) {
-                                try { currentWinrate = Double.parseDouble(line.substring(13).trim()); } catch (Exception ignored) {}
-                            } else if (line.startsWith("INFO DEPTH ")) {
-                                try { currentDepth = String.valueOf(Integer.parseInt(line.substring(11).trim())); } catch (Exception ignored) {}
-                            } else if (line.startsWith("INFO SELDEPTH ")) {
-                                try {
-                                    int seldepth = Integer.parseInt(line.substring(14).trim());
-                                    if (!currentDepth.isEmpty()) currentDepth += "-" + seldepth;
-                                } catch (Exception ignored) {}
-                            } else if (line.startsWith("INFO BESTLINE ")) {
-                                try {
-                                    String coords = line.substring(14).trim();
-                                    String[] coordPairs = coords.split(" ");
-                                    if (coordPairs.length > 0) {
-                                        String[] xy = coordPairs[0].split(",");
-                                        int x = Integer.parseInt(xy[0]);
-                                        int y = Integer.parseInt(xy[1]);
-                                        if (currentPv >= 0) {
-                                            callback.onMultiAnalysisCandidate(currentPv + 1, x, y, currentEval, currentWinrate, currentDepth);
-                                            candidateCount++;
-                                        }
-                                    }
-                                } catch (Exception ignored) {}
-                            } else {
-                                Matcher matcher = MOVE_PATTERN.matcher(line);
-                                if (matcher.find()) {
-                                    String[] parts = line.split(",");
-                                    try {
-                                        int x = Integer.parseInt(parts[0]);
-                                        int y = Integer.parseInt(parts[1]);
-                                        if (x >= 0 && x < boardSize && y >= 0 && y < boardSize) break;
-                                    } catch (NumberFormatException ignored) {}
-                                }
-                            }
-                        } else {
-                            LockSupport.parkNanos(100000L);
-                            if (process != null && !isProcessAlive(process)) break;
-                        }
-                    }
-                    drainRemainingLines();
-                    callback.onMultiAnalysisComplete(candidateCount);
-                } catch (IOException e) {
-                    callback.onMultiAnalysisComplete(0);
-                }
-            }
-        }
-
-        private int[] readMove(long deadline) throws IOException {
-            while (System.currentTimeMillis() < deadline) {
-                if (stdoutClosed || stdout == null) return null;
-                if (stdout.ready()) {
-                    String line = stdout.readLine();
-                    if (line == null) { closeQuietly(stdout); stdoutClosed = true; return null; }
-                    line = line.trim();
-                    if (logger != null) logger.onReceive(line);
-                    Matcher matcher = MOVE_PATTERN.matcher(line);
-                    if (matcher.find()) {
-                        String[] parts = line.split(",");
-                        try {
-                            int x = Integer.parseInt(parts[0]);
-                            int y = Integer.parseInt(parts[1]);
-                            if (x >= 0 && x < boardSize && y >= 0 && y < boardSize) {
-                                return new int[]{x, y};
-                            }
-                        } catch (NumberFormatException ignored) {}
-                    }
-                } else {
-                    LockSupport.parkNanos(100000L);
-                    if (process != null && !isProcessAlive(process)) return null;
-                }
-            }
-            return null;
-        }
-
-        private void drainRemainingLines() throws IOException {
-            int count = 0;
-            while (count < 50 && stdout != null && !stdoutClosed && stdout.ready()) {
-                String line = stdout.readLine();
-                if (line == null) break;
-                if (logger != null) logger.onReceive(line.trim());
-                count++;
-            }
-        }
-
-        public void restart() {
-            if (!started.get()) return;
-            synchronized (ioLock) {
-                try { sendLineLocked("RESTART"); } catch (IOException ignored) {}
-            }
-        }
-
-        public void drainEngineOutput() {
-            synchronized (ioLock) {
-                try { drainRemainingLines(); } catch (IOException ignored) {}
-            }
-        }
-
-        public void stop() {
-            synchronized (ioLock) {
-                if (stdin != null && !stdinClosed) {
-                    try { stdin.write("END\n\r"); stdin.flush(); } catch (IOException ignored) {}
-                }
-                closeQuietly(stdout); closeQuietly(stdin);
-                if (process != null) { process.destroy(); waitForProcess(process, 1000); process = null; }
-                started.set(false);
-            }
-        }
-
-        private static boolean isProcessAlive(Process p) {
-            if (p == null) return false;
-            try { p.exitValue(); return false; } catch (IllegalThreadStateException e) { return true; }
-        }
-
-        private static void waitForProcess(Process p, long timeoutMs) {
-            try { p.waitFor(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        }
-
-        private static void closeQuietly(Closeable c) {
-            if (c != null) try { c.close(); } catch (IOException ignored) {}
-        }
     }
 }
